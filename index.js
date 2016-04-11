@@ -1,10 +1,16 @@
-var H = require('highland')
-var config = require('histograph-config')
-var postgis = require('histograph-db-postgis')
-var elasticsearch = require('histograph-db-elasticsearch')
-var neo4j = require('histograph-db-neo4j')
-var redis = require('redis')
-var redisClient = redis.createClient(config.redis.port, config.redis.host)
+#!/usr/bin/env node
+
+'use strict'
+
+const H = require('highland')
+const readline = require('readline')
+const async = require('async')
+const config = require('spacetime-config')
+const postgis = require('spacetime-db-postgis')
+const elasticsearch = require('spacetime-db-elasticsearch')
+const neo4j = require('spacetime-db-neo4j')
+const redis = require('redis')
+const redisClient = redis.createClient(config.redis.port, config.redis.host)
 
 // TODO:
 // - Delete API's owner database (/Users/bertspaan/data/histograph/api)
@@ -39,12 +45,34 @@ function executeTask (task, callback) {
   task.func(callback)
 }
 
-console.log('Starting Supernova - deleting all data from the Space/Time Directory!\n')
-H(tasks)
-  .map(H.curry(executeTask))
-  .nfcall([])
-  .series()
-  .done(() => {
-    redisClient.quit()
-    console.log('\nSupernova completed!')
-  })
+var answered = false
+async.whilst(
+  () => !answered,
+  (callback) => {
+    const rl = readline.createInterface({input: process.stdin, output: process.stdout})
+    rl.question('Supernova will delete ALL data from this Space/Time Directory instance. Are you sure? (yes/no) ', (answer) => {
+      const lower = answer.toLowerCase()
+      if (lower === 'y' || lower === 'yes') {
+        // Yes! Start Supernova!!!
+        answered = true
+
+        H(tasks)
+          .map(H.curry(executeTask))
+          .nfcall([])
+          .series()
+          .done(() => {
+            redisClient.quit()
+            console.log('\nSupernova completed!')
+          })
+      } else if (lower === 'n' || lower === 'no') {
+        answered = true
+        // No... do nothing
+      } else {
+        console.log('Please answer yes or no!')
+      }
+
+      rl.close()
+      callback()
+    })
+  }
+)

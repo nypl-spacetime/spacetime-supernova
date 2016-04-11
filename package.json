@@ -1,16 +1,24 @@
 {
   "name": "supernova",
-  "version": "1.0.0",
+  "version": "0.0.5",
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "standard"
+  },
+  "bin": {
+    "spacetime-supernova": "index.js"
   },
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "async": "^2.0.0-rc.3",
     "highland": "^2.7.3",
-    "redis": "^2.5.3"
+    "redis": "^2.5.3",
+    "spacetime-config": "nypl-spacetime/spacetime-config",
+    "spacetime-db-elasticsearch": "nypl-spacetime/spacetime-db-elasticsearch",
+    "spacetime-db-neo4j": "nypl-spacetime/spacetime-db-neo4j",
+    "spacetime-db-postgis": "nypl-spacetime/spacetime-db-postgis"
   },
   "devDependencies": {
     "standard": "^6.0.8"
