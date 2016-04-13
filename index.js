@@ -4,6 +4,8 @@
 
 const H = require('highland')
 const readline = require('readline')
+const path = require('path')
+const rimraf = require('rimraf')
 const async = require('async')
 const config = require('spacetime-config')
 const postgis = require('spacetime-db-postgis')
@@ -12,10 +14,17 @@ const neo4j = require('spacetime-db-neo4j')
 const redis = require('redis')
 const redisClient = redis.createClient(config.redis.port, config.redis.host)
 
-// TODO:
-// - Delete API's owner database (/Users/bertspaan/data/histograph/api)
-// - Delete IO's datasets
-// - Deletes results from spacetime-etl steps?
+// Check if dataDir configuration is set
+if (!(config.api.dataDir && config.api.dataDir.length > 1)) {
+  console.error('Error: api.dataDir is not set in configuration file!')
+  process.exit(1)
+}
+
+console.log('Supernova will delete ALL data from this Space/Time Directory instance')
+console.log('Please stop all Space/Time services (spacetime-api, spacetime-core) before executing Supernova!')
+console.log('')
+console.log(`Supernova will clear databases, and delete data from ${config.api.dataDir}`)
+console.log('')
 
 var tasks = [
   {
@@ -37,6 +46,21 @@ var tasks = [
   {
     func: neo4j.deleteAll,
     message: 'Deleting all nodes and relations from Neo4j'
+  },
+  {
+    // TODO: delete only datasets, keep owners
+    func: (callback) => {
+      const dir = path.join(config.api.dataDir, 'api', '*')
+      rimraf(dir, callback)
+    },
+    message: 'Deleting spacetime-api\'s dataset and owners database'
+  },
+  {
+    func: (callback) => {
+      const dir = path.join(config.api.dataDir, 'datasets', '*')
+      rimraf(dir, callback)
+    },
+    message: 'Deleting spacetime-io\'s NDJSON dataset files'
   }
 ]
 
@@ -45,25 +69,39 @@ function executeTask (task, callback) {
   task.func(callback)
 }
 
+function executeAllTasks() {
+  var error = false
+
+  H(tasks)
+    .map(H.curry(executeTask))
+    .nfcall([])
+    .series()
+    .stopOnError((err) => {
+      error = true
+      console.error(err.message)
+    })
+    .done(() => {
+      redisClient.quit()
+      if (error) {
+        console.log('\nNot all tasks completed...')
+        process.exit(1)
+      } else {
+        console.log('\nSupernova completed!')
+      }
+    })
+}
+
 var answered = false
 async.whilst(
   () => !answered,
   (callback) => {
     const rl = readline.createInterface({input: process.stdin, output: process.stdout})
-    rl.question('Supernova will delete ALL data from this Space/Time Directory instance. Are you sure? (yes/no) ', (answer) => {
+    rl.question('Are you sure you want to proceed? (yes/no) ', (answer) => {
       const lower = answer.toLowerCase()
       if (lower === 'y' || lower === 'yes') {
         // Yes! Start Supernova!!!
         answered = true
-
-        H(tasks)
-          .map(H.curry(executeTask))
-          .nfcall([])
-          .series()
-          .done(() => {
-            redisClient.quit()
-            console.log('\nSupernova completed!')
-          })
+        executeAllTasks()
       } else if (lower === 'n' || lower === 'no') {
         answered = true
         // No... do nothing
